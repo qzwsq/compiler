@@ -173,9 +173,9 @@ def p_arguments(p):
 def p_arg(p):
     '''arg : type identifier'''
     global param_idx, param_list
-    param_list[param_idx] = pget(p, 2).data_type
+    param_list[param_idx] = p[2].data_type
     param_idx += 1
-    gencode('arg ' + pget(p, 2).lexme)
+    gencode('arg ' + p[2].lexme)
 
 
 def p_stmt(p):
@@ -187,7 +187,7 @@ def p_stmt(p):
 def p_compound_stmt(p):
     '''compound_stmt : BLP seen_BLP statements BRP '''
     scopes.exit_scope()
-    p[0] = pget(p, 3)
+    p[0] = p[3]
 
 
 def p_seen_BLP(p):
@@ -205,10 +205,10 @@ def p_statements(p):
     p[0] = Content()
     try:
         if pget(p, 3):
-            backpatch(p[1].nextlist, pget(p, 2))
-            p[0].nextlist = pget(p, 3).nextlist
-            p[0].breaklist = merge(p[1].breaklist, pget(p, 3).breaklist)
-            p[0].continuelist = merge(p[1].continuelist, pget(p, 3).continuelist)
+            backpatch(p[1].nextlist, p[2])
+            p[0].nextlist = p[3].nextlist
+            p[0].breaklist = merge(p[1].breaklist, p[3].breaklist)
+            p[0].continuelist = merge(p[1].continuelist, p[3].continuelist)
     except IndexError:
         pass
 
@@ -264,13 +264,13 @@ def p_expression_stmt(p):
 
 def p_for_block(p):
     '''for_block : FOR LP expression_stmt M expression_stmt M expression RP before_loop N M stmt after_loop'''
-    backpatch(pget(p, 5).truelist, p[11])
-    backpatch(p[12].nextlist, pget(p, 6))
-    backpatch(p[12].continuelist, pget(p, 6))
-    backpatch(p[10].nextlist, pget(p, 4))
+    backpatch(p[5].truelist, p[11])
+    backpatch(p[12].nextlist, p[6])
+    backpatch(p[12].continuelist, p[6])
+    backpatch(p[10].nextlist, p[4])
     p[0] = Content()
-    p[0].nextlist = merge(pget(p, 5).falselist, p[12].breaklist)
-    gencode('goto ' + str(pget(p, 6)))
+    p[0].nextlist = merge(p[5].falselist, p[12].breaklist)
+    gencode('goto ' + str(p[6]))
 
 
 def p_before_loop(p):
@@ -289,29 +289,29 @@ def p_if_block(p):
     '''if_block :  IF LP expression RP M stmt ELSE N M stmt
                 | IF LP expression RP M stmt'''
     if pget(p, 7) == 'else':
-        backpatch(pget(p, 3).truelist, pget(p, 5))
-        backpatch(pget(p, 3).falselist, p[9])
+        backpatch(p[3].truelist, p[5])
+        backpatch(p[3].falselist, p[9])
         p[0] = Content()
-        tmp = merge(pget(p, 6).nextlist, pget(p, 8).nextlist)
+        tmp = merge(p[6].nextlist, p[8].nextlist)
         p[0].nextlist = merge(tmp, p[10].nextlist)
-        p[0].breaklist = merge(p[10].breaklist, pget(p, 6).breaklist)
-        p[0].continuelist = merge(p[10].continuelist, pget(p, 6).continuelist)
+        p[0].breaklist = merge(p[10].breaklist, p[6].breaklist)
+        p[0].continuelist = merge(p[10].continuelist, p[6].continuelist)
     else:
-        backpatch(pget(p, 3).truelist, pget(p, 5))
+        backpatch(p[3].truelist, p[5])
         p[0] = Content()
-        p[0].nextlist = merge(pget(p, 3).falselist, pget(p, 6).nextlist)
-        p[0].breaklist = pget(p, 6).breaklist
-        p[0].continuelist = pget(p, 6).continuelist
+        p[0].nextlist = merge(p[3].falselist, p[6].nextlist)
+        p[0].breaklist = p[6].breaklist
+        p[0].continuelist = p[6].continuelist
 
 
 def p_while_block(p):
     '''while_block : WHILE M LP expression RP M before_loop stmt after_loop'''
-    backpatch(pget(p, 8).nextlist, pget(p, 2))
-    backpatch(pget(p, 4).truelist, pget(p, 6))
-    backpatch(pget(p, 8).continuelist, pget(p, 2))
+    backpatch(p[8].nextlist, p[2])
+    backpatch(p[4].truelist, p[6])
+    backpatch(p[8].continuelist, p[2])
     p[0] = Content()
-    p[0].nextlist = merge(pget(p, 4).falselist, pget(p, 8).breaklist)
-    gencode('goto ' + str(pget(p, 2)))
+    p[0].nextlist = merge(p[4].falselist, p[8].breaklist)
+    gencode('goto ' + str(p[2]))
 
 
 def p_declaration(p):
@@ -339,8 +339,8 @@ def p_expression(p):
                   | sub_expr'''
     p[0] = Content()
     if pget(p, 2) == ',':
-        p[0].truelist = pget(p, 3).truelist
-        p[0].falselist = pget(p, 3).falselist
+        p[0].truelist = p[3].truelist
+        p[0].falselist = p[3].falselist
     else:
         p[0].truelist = p[1].truelist
         p[0].falselist = p[1].falselist
@@ -361,22 +361,22 @@ def p_sub_expr(p):
                 | unary_expr'''
     p[0] = Content()
     if pget(p, 2) in ['<', '>', '==', '!=', '>=', '<=']:
-        type_check(p[1].data_type, pget(p, 3).data_type, 2)
-        gencode_rel(p[0], p[1], pget(p, 3), ' ' + pget(p, 2) + ' ')
+        type_check(p[1].data_type, p[3].data_type, 2)
+        gencode_rel(p[0], p[1], p[3], ' ' + p[2] + ' ')
     elif pget(p, 2) == '&&':
-        type_check(p[1].data_type, pget(p, 4).data_type, 2)
+        type_check(p[1].data_type, p[4].data_type, 2)
         p[0].datatype = p[1].data_type
-        backpatch(p[1].truelist, pget(p, 3))
-        p[0].truelist = pget(p, 4).truelist
-        p[0].falselist = merge(p[1].falselist, pget(p, 4).falselist)
+        backpatch(p[1].truelist, p[3])
+        p[0].truelist = p[4].truelist
+        p[0].falselist = merge(p[1].falselist, p[4].falselist)
     elif pget(p, 2) == '||':
-        type_check(p[1].data_type, pget(p, 4).data_type, 2)
+        type_check(p[1].data_type, p[4].data_type, 2)
         p[0].datatype = p[1].data_type
-        backpatch(p[1].falselist, pget(p, 3))
-        p[0].truelist = merge(p[1].truelist, pget(p, 4).truelist)
-        p[0].falselist = pget(p, 4).falselist
+        backpatch(p[1].falselist, p[3])
+        p[0].truelist = merge(p[1].truelist, p[4].truelist)
+        p[0].falselist = p[4].falselist
     elif p[1] == '!':
-        p[0].data_type = pget(p, 2).data_type
+        p[0].data_type = p[2].data_type
         p[0].truelist = p[1].falselist
         p[0].falselist = p[1].truelist
     else:
@@ -398,14 +398,14 @@ def p_assignment_expr(p):
     p[0] = Content()
     global rhs
     if pget(p, 4) in ['arch', 'array', 'unary']:
-        type_check(p[1].entry.data_type, pget(p, 3).data_type, 1)
-        p[0].data_type = pget(p, 3).data_type
-        p[0].code = str(p[1].entry.lexme) + str(pget(p, 2)) + str(pget(p, 3).addr)
+        type_check(p[1].entry.data_type, p[3].data_type, 1)
+        p[0].data_type = p[3].data_type
+        p[0].code = str(p[1].entry.lexme) + str(p[2]) + str(p[3].addr)
         gencode(p[0].code)
         rhs = 0
     elif pget(p, 4) == 'func_call':
-        type_check(p[1].entry.data_type, pget(p, 3), 1)
-        p[0].data_type = pget(p, 3)
+        type_check(p[1].entry.data_type, p[3], 1)
+        p[0].data_type = p[3]
 
 
 def p_seen_arch(p):
@@ -435,11 +435,11 @@ def p_unary_expr(p):
                   | INCREMENT identifier'''
     p[0] = Content()
     if p[1] in ['++', '--']:
-        p[0].data_type = pget(p, 2).data_type
-        p[0].code = p[1] + pget(p, 2).lexme
+        p[0].data_type = p[2].data_type
+        p[0].code = p[1] + p[2].lexme
     else:
         p[0].data_type = p[1].data_type
-        p[0].code = p[1].lexme + pget(p, 2)
+        p[0].code = p[1].lexme + p[2]
     gencode(p[0].code)
 
 
@@ -495,19 +495,19 @@ def p_arithmetic_expr(p):
                        | constant'''
     p[0] = Content()
     if pget(p, 2) in ['+', '-', '*', '/', '%']:
-        type_check(p[1].data_type, pget(p, 3).data_type, 0)
+        type_check(p[1].data_type, p[3].data_type, 0)
         p[0].data_type = p[1].data_type
-        gencode_math(p[0], p[1], pget(p, 3), ' ' + p[2] + ' ')
+        gencode_math(p[0], p[1], p[3], ' ' + p[2] + ' ')
     elif p[1] == '(':
-        p[0].data_type = pget(p, 2).data_type
+        p[0].data_type = p[2].data_type
         p[0].addr = p[2].addr
         p[0].code = p[2].code
     elif p[1] == '-':
         global temp_var_number
-        p[0].data_type = pget(p, 2).data_type
+        p[0].data_type = p[2].data_type
         p[0].addr = 't' + str(temp_var_number)
-        expr = p[0].addr + ' = minus ' + pget(p, 2).addr
-        p[0].code = pget(p, 2).code + expr
+        expr = p[0].addr + ' = minus ' + p[2].addr
+        p[0].code = p[2].code + expr
         gencode(expr)
         temp_var_number += 1
     else:
@@ -531,21 +531,21 @@ def p_constant(p):
 def p_array_access(p):
     '''array_access : identifier MLP array_index MRP '''
     if is_declaration == 1:
-        if pget(p, 3).value <= 0:
+        if p[3].value <= 0:
             error_msg('size of array invalid')
-        elif pget(p, 3).is_constant == 1:
-            p[1].array_dimension = pget(p, 3).value
-    elif pget(p, 3).is_constant == 1:
-        if pget(p, 3).value > p[1].array_dimension:
+        elif p[3].is_constant == 1:
+            p[1].array_dimension = p[3].value
+    elif p[3].is_constant == 1:
+        if p[3].value > p[1].array_dimension:
             error_msg('array index out of bound')
-        elif pget(p, 3).value < 0:
+        elif p[3].value < 0:
             error_msg('array index cannot be negative')
     p[0] = Content()
     p[0].data_type = p[1].data_type
-    if pget(p, 3).is_constant == 1:
-        p[0].code = p[1].lexme + '[' + str(pget(p, 3).value) + ']'
+    if p[3].is_constant == 1:
+        p[0].code = p[1].lexme + '[' + str(p[3].value) + ']'
     else:
-        p[0].code = p[1].lexme + '[' + pget(p, 3).lexme + ']'
+        p[0].code = p[1].lexme + '[' + p[3].lexme + ']'
     p[0].entry = p[1]
 
 
