@@ -1,20 +1,7 @@
 # coding=utf-8
-from clex import tokens
+from clex import tokens, constant_table
 from ply import yacc
 from symboltable import *
-
-current_dtype = 0
-is_declaration = 0
-is_loop = 0
-is_func = 0
-param_list = [0] * 10
-param_idx = 0
-flag = 0
-rhs = 0
-func_type = None
-nextinstr = 0
-temp_var_number = 0
-intermediate = []
 
 
 def pget(p, idx):
@@ -102,20 +89,19 @@ def p_function(p):
 
 def p_seen_identifier(p):
     '''seen_identifier :'''
-    global func_type, is_declaration, current_scope, table_index
+    global func_type, is_declaration
     func_type = current_dtype
     is_declaration = 0
-    current_scope = create_new_scope(table_index, current_scope)
-    table_index += 1
-    dprint('current scope = {}'.format(current_scope))
-    gencode(p[-1]['lexme'] + ':')
+    scopes.create_new_scope()
+    dprint('current scope = {}'.format(scopes.current_scope))
+    gencode(p[-1].lexme + ':')
 
 
 def p_seen_argument_list(p):
     '''seen_argument_list :'''
     global param_idx, is_declaration, is_func, flag
     is_declaration = 0
-    fill_parameter_list(p[-4], param_list, param_idx)
+    p[-4].fill_parameter_list(param_list, param_idx)
     param_idx = 0
     is_func = 1
     flag = 1
@@ -187,33 +173,28 @@ def p_arguments(p):
 def p_arg(p):
     '''arg : type identifier'''
     global param_idx, param_list
-    param_list[param_idx] = pget(p, 2)['data_type']
+    param_list[param_idx] = pget(p, 2).data_type
     param_idx += 1
-    gencode('arg ' + pget(p, 2)['lexme'])
+    gencode('arg ' + pget(p, 2).lexme)
 
 
 def p_stmt(p):
     '''stmt : compound_stmt
             | single_stmt'''
-    p[0] = Content()
     p[0] = p[1]
 
 
 def p_compound_stmt(p):
     '''compound_stmt : BLP seen_BLP statements BRP '''
-    global current_scope, table_index
-    current_scope = exit_scope()
-    table_index = current_scope
-    p[0] = Content()
+    scopes.exit_scope()
     p[0] = pget(p, 3)
 
 
 def p_seen_BLP(p):
     '''seen_BLP :'''
-    global flag, current_scope, table_index
+    global flag
     if flag != 0:
-        current_scope = create_new_scope(table_index, current_scope)
-        table_index += 1
+        scopes.create_new_scope()
     else:
         flag = 0
 
@@ -417,13 +398,13 @@ def p_assignment_expr(p):
     p[0] = Content()
     global rhs
     if pget(p, 4) in ['arch', 'array', 'unary']:
-        type_check(p[1].entry['data_type'], pget(p, 3).data_type, 1)
+        type_check(p[1].entry.data_type, pget(p, 3).data_type, 1)
         p[0].data_type = pget(p, 3).data_type
-        p[0].code = str(p[1].entry['lexme']) + str(pget(p, 2)) + str(pget(p, 3).addr)
+        p[0].code = str(p[1].entry.lexme) + str(pget(p, 2)) + str(pget(p, 3).addr)
         gencode(p[0].code)
         rhs = 0
     elif pget(p, 4) == 'func_call':
-        type_check(p[1].entry['data_type'], pget(p, 3), 1)
+        type_check(p[1].entry.data_type, pget(p, 3), 1)
         p[0].data_type = pget(p, 3)
 
 
@@ -454,11 +435,11 @@ def p_unary_expr(p):
                   | INCREMENT identifier'''
     p[0] = Content()
     if p[1] in ['++', '--']:
-        p[0].data_type = pget(p, 2)['data_type']
-        p[0].code = p[1] + pget(p, 2)['lexme']
+        p[0].data_type = pget(p, 2).data_type
+        p[0].code = p[1] + pget(p, 2).lexme
     else:
-        p[0].data_type = p[1]['data_type']
-        p[0].code = p[1]['lexme'] + pget(p, 2)
+        p[0].data_type = p[1].data_type
+        p[0].code = p[1].lexme + pget(p, 2)
     gencode(p[0].code)
 
 
@@ -479,13 +460,12 @@ def p_seen_id(p):
 
 def p_identifier(p):
     '''identifier : IDENTIFIER'''
-    global current_scope
     if is_declaration != 0 and rhs == 0:
-        p[1] = insert(symboltable_list[current_scope]['symboltable'], p[1], 2147483647, current_dtype)
+        p[1] = scopes.symboltable_list[scopes.current_scope].insert(p[1], 2147483647, current_dtype)
         if not p[1]:
             error_msg('redeclaration of variable')
     else:
-        p[1] = recursive_search(p[1], current_scope)
+        p[1] = scopes.recursive_search(p[1])
         if not p[1]:
             error_msg('varible bot declared')
     p[0] = p[1]
@@ -531,11 +511,11 @@ def p_arithmetic_expr(p):
         gencode(expr)
         temp_var_number += 1
     else:
-        p[0].data_type = p[1]['data_type']
-        if p[1]['is_constant'] == 1:
-            p[0].addr = p[1]['value']
+        p[0].data_type = p[1].data_type
+        if p[1].is_constant == 1:
+            p[0].addr = p[1].value
         else:
-            p[0].addr = p[1]['lexme']
+            p[0].addr = p[1].lexme
 
 
 def p_constant(p):
@@ -544,28 +524,28 @@ def p_constant(p):
                 | CHAR_CONSTANT
                 | FLOAT_CONSTANT'''
     p[1] = constant_table[p[1]]
-    p[1]['is_constant'] = 1
+    p[1].is_constant = 1
     p[0] = p[1]
 
 
 def p_array_access(p):
     '''array_access : identifier MLP array_index MRP '''
     if is_declaration == 1:
-        if pget(p, 3)['value'] <= 0:
+        if pget(p, 3).value <= 0:
             error_msg('size of array invalid')
-        elif pget(p, 3)['is_constant'] == 1:
-            p[1]['array_dimension'] = pget(p, 3)['value']
-    elif pget(p, 3)['is_constant'] == 1:
-        if pget(p, 3)['value'] > p[1]['array_dimension']:
+        elif pget(p, 3).is_constant == 1:
+            p[1].array_dimension = pget(p, 3).value
+    elif pget(p, 3).is_constant == 1:
+        if pget(p, 3).value > p[1].array_dimension:
             error_msg('array index out of bound')
-        elif pget(p, 3)['value'] < 0:
+        elif pget(p, 3).value < 0:
             error_msg('array index cannot be negative')
     p[0] = Content()
-    p[0].data_type = p[1]['data_type']
-    if pget(p, 3)['is_constant'] == 1:
-        p[0].code = p[1]['lexme'] + '[' + str(pget(p, 3)['value']) + ']'
+    p[0].data_type = p[1].data_type
+    if pget(p, 3).is_constant == 1:
+        p[0].code = p[1].lexme + '[' + str(pget(p, 3).value) + ']'
     else:
-        p[0].code = p[1]['lexme'] + '[' + pget(p, 3)['lexme'] + ']'
+        p[0].code = p[1].lexme + '[' + pget(p, 3).lexme + ']'
     p[0].entry = p[1]
 
 
@@ -579,10 +559,10 @@ def p_function_call(p):
     '''function_call : identifier LP parameter_list RP
                      | identifier LP RP '''
     global param_idx, param_list
-    check_parameter_list(p[1], param_list, param_idx)
-    p[0] = p[1]['data_type']
+    p[1].check_parameter_list(param_list, param_idx)
+    p[0] = p[1].data_type
     param_idx = 0
-    gencode('call ' + p[1]['lexme'])
+    gencode('call ' + p[1].lexme)
 
 
 def p_parameter_list(p):
@@ -598,7 +578,7 @@ def p_parameter(p):
         param_list[param_idx] = p[1].data_type
         gencode('param ' + str(p[1].addr))
     else:
-        param_list[param_idx] = constant_table[p[1]]['data_type']
+        param_list[param_idx] = constant_table[p[1]].data_type
         gencode('param ' + p[1])
     param_idx += 1
 
@@ -623,14 +603,17 @@ def p_error(p):
 
 
 if __name__ == '__main__':
-    for i in range(10):
-        symboltable_list.append({
-            'symboltable': {},
-             'parent': -1}
-        )
-    parser = yacc.yacc()
-    symboltable_list[0]['symboltable'] = {}
-    with open('test.c', 'r') as code:
-        parser.parse(code.read(), debug=0)
-    for instr in intermediate:
-        print(instr)
+    print('-' * 80)
+    for filename in ['test.c', 'test1.c', 'test-func.c']:
+        print('filename = {}, generate intermediate code, result:'.format(filename))
+        current_dtype, is_declaration, is_loop, is_func, param_idx, flag, rhs, func_type, nextinstr, temp_var_number = \
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        param_list = [0] * 10
+        intermediate = []
+        scopes = ScopeTable()
+        parser = yacc.yacc()
+        with open(filename, 'r') as code:
+            parser.parse(code.read(), debug=0)
+        for instr in intermediate:
+            print(instr)
+        print('-'*80)

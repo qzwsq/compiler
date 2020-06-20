@@ -1,7 +1,8 @@
 # coding=utf-8
 from ply import lex
-from symboltable import insert, constant_table
+from symboltable import SymbolTable
 
+constant_table = SymbolTable()
 tokens = [
   'IDENTIFIER',
   'DEC_CONSTANT', 'HEX_CONSTANT', 'CHAR_CONSTANT', 'FLOAT_CONSTANT', 'STRING',
@@ -120,25 +121,25 @@ def t_RETURN(t):
 
 def t_FLOAT_CONSTANT(t):
     r'[\+-]?[0-9]*\.[0-9]+'
-    insert(constant_table, t.value, float(t.value), 5)
+    constant_table.insert(t.value, float(t.value), 5)
     return t
 
 
 def t_DEC_CONSTANT(t):
     r'[\+-]?[0-9]+'
-    insert(constant_table, t.value, int(t.value), 0)
+    constant_table.insert(t.value, int(t.value), 0)
     return t
 
 
 def t_STRING(t):
     r'\"[^\"\n]*\"'
-    insert(constant_table, t.value, 2147483647, 7)
+    constant_table.insert(t.value, 2147483647, 7)
     return t
 
 
 def t_CHAR_CONSTANT(t):
     r'\'([a-zA-Z]|[0-9])\''
-    insert(constant_table, t.value, t.value, 4)
+    constant_table.insert(t.value, t.value, 4)
     return t
 
 
